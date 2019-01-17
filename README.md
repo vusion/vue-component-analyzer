@@ -1,22 +1,22 @@
-# js-repo-template
+# js-repo-boilerplate
 
 - [中文说明](README.zh-CN.md)
 
-A template for creating npm package repo.
+A boilerplate for creating npm package repo.
 
 [![CircleCI][circleci-img]][circleci-url]
 [![NPM Version][npm-img]][npm-url]
 [![Dependencies][david-img]][david-url]
 [![NPM Download][download-img]][download-url]
 
-[circleci-img]: https://img.shields.io/circleci/project/github/necfe/js-repo-template.svg?style=flat-square
-[circleci-url]: https://circleci.com/gh/necfe/js-repo-template
-[npm-img]: http://img.shields.io/npm/v/js-repo-template.svg?style=flat-square
-[npm-url]: http://npmjs.org/package/js-repo-template
-[david-img]: http://img.shields.io/david/necfe/js-repo-template.svg?style=flat-square
-[david-url]: https://david-dm.org/necfe/js-repo-template
-[download-img]: https://img.shields.io/npm/dm/js-repo-template.svg?style=flat-square
-[download-url]: https://npmjs.org/package/js-repo-template
+[circleci-img]: https://img.shields.io/circleci/project/github/necfe/js-repo-boilerplate.svg?style=flat-square
+[circleci-url]: https://circleci.com/gh/necfe/js-repo-boilerplate
+[npm-img]: http://img.shields.io/npm/v/js-repo-boilerplate.svg?style=flat-square
+[npm-url]: http://npmjs.org/package/js-repo-boilerplate
+[david-img]: http://img.shields.io/david/necfe/js-repo-boilerplate.svg?style=flat-square
+[david-url]: https://david-dm.org/necfe/js-repo-boilerplate
+[download-img]: https://img.shields.io/npm/dm/js-repo-boilerplate.svg?style=flat-square
+[download-url]: https://npmjs.org/package/js-repo-boilerplate
 
 ## Example
 
@@ -33,7 +33,7 @@ Introduce some major features of this project.
 ## Install
 
 ``` shell
-npm install --save-dev js-repo-template
+npm install --save-dev js-repo-boilerplate
 ```
 
 ## Options
@@ -74,7 +74,7 @@ npm run test
 
 ## Changelog
 
-See [Releases](https://github.com/necfe/js-repo-template/releases)
+See [Releases](https://github.com/necfe/js-repo-boilerplate/releases)
 
 ## Contributing
 

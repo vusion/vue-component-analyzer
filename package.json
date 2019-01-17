@@ -1,6 +1,6 @@
 {
-  "name": "js-repo-template",
-  "description": "A template for creating npm package repo",
+  "name": "js-repo-boilerplate",
+  "description": "A boilerplate for creating npm package repo",
   "version": "0.1.0",
   "author": "Rainfore <rainforest92@126.com>",
   "scripts": {
@@ -9,20 +9,20 @@
     "test": "mocha --timeout 5000 ./test/integration.test.js"
   },
   "main": "./index.js",
-  "repository": "necfe/js-repo-template",
+  "repository": "necfe/js-repo-boilerplate",
   "bugs": {
-    "url": "http://github.com/necfe/js-repo-template/issues"
+    "url": "http://github.com/necfe/js-repo-boilerplate/issues"
   },
   "license": "MIT",
   "keywords": [
     "js",
     "repo",
-    "template"
+    "boilerplate"
   ],
   "tags": [
     "js",
     "repo",
-    "template"
+    "boilerplate"
   ],
   "dependencies": {},
   "devDependencies": {
