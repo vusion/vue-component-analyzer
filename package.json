@@ -1,7 +1,7 @@
 {
   "name": "js-repo-boilerplate",
   "description": "A boilerplate for creating npm package repo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "Rainfore <rainforest92@126.com>",
   "scripts": {
     "lint": "eslint ./src --fix",
