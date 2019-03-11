@@ -1,7 +1,7 @@
 {
   "name": "vue-component-analyzer",
   "description": "Analyze dependencies, inheritance and some other useful info of Vue components in static code.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "author": "Rainfore <rainforest92@126.com>",
   "scripts": {
     "lint": "eslint ./src --fix",
@@ -24,7 +24,9 @@
     "component",
     "analyzer"
   ],
-  "dependencies": {},
+  "dependencies": {
+    "babel-core": "^6.26.3"
+  },
   "devDependencies": {
     "eslint": "^5.12.0",
     "eslint-config-vusion": "^3.0.1",
