@@ -1,7 +1,7 @@
 {
-  "name": "js-repo-boilerplate",
-  "description": "A boilerplate for creating npm package repo",
-  "version": "0.1.1",
+  "name": "vue-component-analyzer",
+  "description": "Analyze dependencies, inheritance and some other useful info of Vue components in static code.",
+  "version": "0.0.1",
   "author": "Rainfore <rainforest92@126.com>",
   "scripts": {
     "lint": "eslint ./src --fix",
@@ -9,20 +9,20 @@
     "test": "mocha --timeout 5000 ./test/integration.test.js"
   },
   "main": "./index.js",
-  "repository": "necfe/js-repo-boilerplate",
+  "repository": "vusion/vue-component-analyzer",
   "bugs": {
-    "url": "http://github.com/necfe/js-repo-boilerplate/issues"
+    "url": "http://github.com/vusion/vue-component-analyzer/issues"
   },
   "license": "MIT",
   "keywords": [
-    "js",
-    "repo",
-    "boilerplate"
+    "vue",
+    "component",
+    "analyzer"
   ],
   "tags": [
-    "js",
-    "repo",
-    "boilerplate"
+    "vue",
+    "component",
+    "analyzer"
   ],
   "dependencies": {},
   "devDependencies": {

@@ -1,22 +1,22 @@
-# js-repo-boilerplate
+# vue-component-analyzer
 
 - [README in English](README.md)
 
-这是一个 npm 仓库模板。
+Analyze dependencies, inheritance and some other useful info of Vue components in static code.
 
 [![CircleCI][circleci-img]][circleci-url]
 [![NPM Version][npm-img]][npm-url]
 [![Dependencies][david-img]][david-url]
 [![NPM Download][download-img]][download-url]
 
-[circleci-img]: https://img.shields.io/circleci/project/github/necfe/js-repo-boilerplate.svg?style=flat-square
-[circleci-url]: https://circleci.com/gh/necfe/js-repo-boilerplate
-[npm-img]: http://img.shields.io/npm/v/js-repo-boilerplate.svg?style=flat-square
-[npm-url]: http://npmjs.org/package/js-repo-boilerplate
-[david-img]: http://img.shields.io/david/necfe/js-repo-boilerplate.svg?style=flat-square
-[david-url]: https://david-dm.org/necfe/js-repo-boilerplate
-[download-img]: https://img.shields.io/npm/dm/js-repo-boilerplate.svg?style=flat-square
-[download-url]: https://npmjs.org/package/js-repo-boilerplate
+[circleci-img]: https://img.shields.io/circleci/project/github/vusion/vue-component-analyzer.svg?style=flat-square
+[circleci-url]: https://circleci.com/gh/vusion/vue-component-analyzer
+[npm-img]: http://img.shields.io/npm/v/vue-component-analyzer.svg?style=flat-square
+[npm-url]: http://npmjs.org/package/vue-component-analyzer
+[david-img]: http://img.shields.io/david/vusion/vue-component-analyzer.svg?style=flat-square
+[david-url]: https://david-dm.org/vusion/vue-component-analyzer
+[download-img]: https://img.shields.io/npm/dm/vue-component-analyzer.svg?style=flat-square
+[download-url]: https://npmjs.org/package/vue-component-analyzer
 
 ## 示例
 
@@ -29,7 +29,7 @@
 ## 安装
 
 ``` shell
-npm install --save-dev js-repo-boilerplate
+npm install --save-dev vue-component-analyzer
 ```
 
 ## 选项
@@ -70,7 +70,7 @@ npm run test
 
 ## 修改日志
 
-See [Releases](https://github.com/necfe/js-repo-boilerplate/releases)
+See [Releases](https://github.com/vusion/vue-component-analyzer/releases)
 
 ## 贡献指南
 
