@@ -1,3 +1,4 @@
+const fs = require('fs-extra');
 const path = require('path');
 const babel = require('babel-core');
 
@@ -15,6 +16,13 @@ class VueExtendTree {
         Object.assign(this, options);
     }
 
+    purge(files) {
+        files.forEach((file) => Object.keys(this.caches).forEach((key) => {
+            if (key.startsWith(file))
+                delete this.caches[key];
+        }));
+    }
+
     build() {
     // @TODO
     // @TODO: watch deps
@@ -25,28 +33,23 @@ class VueExtendTree {
         if (this.caches[fullPath])
             return Promise.resolve(this.caches[fullPath]);
         else {
-            return new Promise((resolve, reject) => {
-                this.loader.fs.readFile(fullPath, (err, content) => {
-                    if (err)
-                        return reject(err);
+            return fs.readFile(fullPath).then((content) => {
+                content = content.toString();
+                const isVue = fullPath.endsWith('.vue');
+                if (isVue) {
+                    const found = content.match(/<script>([\s\S]+)<\/script>/);
+                    content = found ? found[1] : '';
+                }
 
-                    content = content.toString();
-                    const isVue = fullPath.endsWith('.vue');
-                    if (isVue) {
-                        const found = content.match(/<script>([\s\S]+)<\/script>/);
-                        content = found ? found[1] : '';
-                    }
-
-                    const jsFile = new JSFile({
-                        fullPath,
-                        content,
-                        babelResult: babel.transform(content),
-                        isVue,
-                    });
-
-                    this.caches[fullPath] = jsFile;
-                    return resolve(jsFile);
+                const jsFile = new JSFile({
+                    fullPath,
+                    content,
+                    babelResult: babel.transform(content),
+                    isVue,
                 });
+
+                this.caches[fullPath] = jsFile;
+                return jsFile;
             });
         }
     }
@@ -60,15 +63,11 @@ class VueExtendTree {
 
     importVueObject(fullPath, sourcePath, identifier) {
         return new Promise((resolve, reject) => {
-            this.loader.resolve(path.dirname(fullPath), sourcePath, (err, importPath) => {
-                if (err)
-                    return reject(err);
-
-                if (importPath.endsWith('.vue') && this.loader.fs.statSync(importPath).isDirectory())
-                    importPath += '/index.js';
-                return resolve(this.loadJSFile(importPath)
-                    .then((jsFile) => this.findVueObject(jsFile, identifier, true, true)));
-            });
+            let importPath = this.resolve(sourcePath, path.dirname(fullPath));
+            if (importPath.endsWith('.vue') && fs.statSync(importPath).isDirectory())
+                importPath += '/index.js';
+            return resolve(this.loadJSFile(importPath)
+                .then((jsFile) => this.findVueObject(jsFile, 'export', identifier, true)));
         });
     }
 
@@ -76,15 +75,38 @@ class VueExtendTree {
      * Find vue object recursively
      * @param {*} jsFile - Babel result
      * @param {*} identifier
-     * @param {*} exported - find from exports
+     * @param {FromType} from - 'local' or 'export' - find from local or exports;
      * @param {*} recursive
      * @return { objectExpression, jsFile, identifier }
+     *
+     * @examples
+     * e-1. export default {}
+     * e-2. export default ID [local]-> e-5, e-6, i-7, i-8, i-9, v-10, v-11
+     * e-3. export { A as ID } [local]-> e-5, e-6, i-7, i-8, i-9, v-10, v-11
+     * e-4. export * from
+     * e-5. export const ID = {}
+     * e-6. export const A = ID [local]->
+     * i-7. import ID from [export]-> e-1, e-2
+     * i-8. import { A as ID } from [export]-> e-3, e-4, e-5, e-6
+     * i-9. import * from from [export]-> e-3, e-4, e-5, e-6
+     * v-10. const ID
+     * v-11. const A = ID [local]->
+     *
+     * 3 types:
+     * from export default
+     * from export
+     * from local
      */
-    findVueObject(jsFile, identifier = 'default', exported = false, recursive = false) {
+    findVueObject(jsFile, from = 'export', identifier = 'default', recursive = false, beforeNode) {
+        if (!identifier)
+            throw new Error('Argument identifier is required!');
+
         return Promise.resolve(jsFile).then((jsFile) => {
             const babelResult = jsFile.babelResult;
 
-            if (identifier === 'default') {
+            if (from !== 'export' && identifier === 'default')
+                throw new Error('Identifier `default` is reserved word! Please set `from` as `export`');
+            else if (from === 'export' && identifier === 'default') { // Find from export default, ignore 'from' param for easy way
                 const exportDefault = babelResult.ast.program.body.find((node) => node.type === 'ExportDefaultDeclaration');
                 if (!exportDefault)
                     throw new Error('Cannot find export default');
@@ -92,15 +114,18 @@ class VueExtendTree {
                 if (exportDefault.declaration.type === 'ObjectExpression')
                     return {
                         objectExpression: exportDefault.declaration,
+                        objectDeclaration: exportDefault,
                         jsFile,
                         identifier,
                     };
                 else if (exportDefault.declaration.type === 'Identifier') {
                     const exportDefaultName = exportDefault.declaration.name;
-                    return this.findVueObject(jsFile, exportDefaultName);
-                }
+                    return this.findVueObject(jsFile, 'local', exportDefaultName, recursive);
+                } else
+                    return null;
             } else {
-                if (exported) {
+                // Find from exports
+                if (from === 'export') {
                     const exportsNode = babelResult.metadata.modules.exports;
                     const externalAllSpecifiers = [];
                     const exportSpecifier = exportsNode.specifiers.find((specifier) => {
@@ -111,16 +136,16 @@ class VueExtendTree {
                         return false;
                     });
                     if (exportSpecifier)
-                        identifier = exportSpecifier.local;
+                        identifier = exportSpecifier.local; // Change identifier to local
                     else if (recursive)
                         return Promise.all(externalAllSpecifiers.map((specifier) => this.importVueObject(jsFile.fullPath, specifier.source, identifier)))
-                            .then((results) => results.find((result) => !!result.objectExpression));
+                            .then((results) => results.find((result) => !!result));
                     else
                         throw new Error('Cannot find identifier in exports: ' + identifier);
                 }
 
                 if (recursive) {
-                    // find in imports
+                    // Find from imports
                     let importSpecifier;
                     const importsNode = babelResult.metadata.modules.imports.find((impt) => impt.specifiers.some((specifier) => {
                         if (specifier.local === identifier) {
@@ -133,44 +158,61 @@ class VueExtendTree {
                         return this.importVueObject(jsFile.fullPath, importsNode.source, importSpecifier.imported);
                 }
 
-                // find in body
-                let objectExpression;
-                babelResult.ast.program.body.some((node) => {
-                    if (node.type !== 'VariableDeclaration')
-                        return false;
-                    return node.declarations.some((declaration) => {
-                        if (declaration.id.name === identifier && declaration.init.type === 'ObjectExpression') {
-                            objectExpression = declaration.init;
-                            return true;
-                        } else
-                            return false;
-                    });
-                });
+                // Find from local
+                for (const node of babelResult.ast.program.body) {
+                    if (node === beforeNode) // 必须在 beforeNode 声明之前
+                        return null;
 
-                return {
-                    objectExpression,
-                    jsFile,
-                    identifier,
-                };
+                    let declarations;
+                    if (node.type === 'VariableDeclaration')
+                        declarations = node.declarations;
+                    else if (node.type === 'ExportNamedDeclaration')
+                        declarations = node.declaration.declarations;
+                    else
+                        continue;
+
+                    for (const declarator of declarations) {
+                        if (declarator.type !== 'VariableDeclarator' || declarator.id.name !== identifier)
+                            continue;
+                        if (declarator.init.type === 'ObjectExpression') {
+                            return {
+                                objectExpression: declarator.init,
+                                objectDeclaration: node,
+                                jsFile,
+                                identifier,
+                            };
+                        } else if (declarator.init.type === 'Identifier')
+                            return this.findVueObject(jsFile, 'local', declarator.init.name, recursive, node);
+                    }
+                }
+
+                return null;
             }
         });
     }
 
     findSuper(jsFile) {
-        return this.findVueObject(jsFile, 'default').then(({ objectExpression, jsFile, identifier }) => {
-            if (jsFile.extends) // Cached
-                return jsFile.extends;
+        return this.findVueObject(jsFile).then((vueResult) => {
+            // this.loader.addDependency(jsFile.fullPath);
 
-            const extendsName = objectExpression ? this.findExtendsName(objectExpression) : identifier;
+            if (!vueResult)
+                throw new Error('Cannot find vue object!');
+
+            if (vueResult.jsFile.extends) // Cached
+                return vueResult.jsFile.extends;
+
+            const extendsName = vueResult.objectExpression ? this.findExtendsName(vueResult.objectExpression) : vueResult.identifier;
             if (!extendsName)
-                throw new Error('Cannot find extends name');
+                throw new Error('Cannot find extends name!');
 
-            return this.findVueObject(jsFile, extendsName, false, true).then((result) => {
-                if (!result.objectExpression)
-                    throw new Error('Cannot find vue object');
+            return this.findVueObject(vueResult.jsFile, 'local', extendsName, true, vueResult.objectDeclaration).then((extendsResult) => {
+                // this.loader.addDependency(vueResult.jsFile.fullPath);
 
-                jsFile.extends = result.jsFile;
-                return result.jsFile;
+                if (!extendsResult.objectExpression)
+                    throw new Error('Cannot find vue object!');
+
+                vueResult.jsFile.extends = extendsResult.jsFile;
+                return extendsResult.jsFile;
             });
         });
     }
