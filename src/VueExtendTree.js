@@ -44,7 +44,9 @@ class VueExtendTree {
                 const jsFile = new JSFile({
                     fullPath,
                     content,
-                    babelResult: babel.transform(content),
+                    babelResult: babel.transform(content, {
+                        plugins: ['syntax-dynamic-import'],
+                    }),
                     isVue,
                 });
 
