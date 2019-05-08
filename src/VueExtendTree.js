@@ -68,6 +68,8 @@ class VueExtendTree {
             let importPath = this.resolve(sourcePath, path.dirname(fullPath));
             if (importPath.endsWith('.vue') && fs.statSync(importPath).isDirectory())
                 importPath += '/index.js';
+            else if (importPath.endsWith('dist/index.js'))
+                importPath = importPath.replace(/dist\/index\.js$/, 'index.js');
             return resolve(this.loadJSFile(importPath)
                 .then((jsFile) => this.findVueObject(jsFile, 'export', identifier, true)));
         });
@@ -209,9 +211,8 @@ class VueExtendTree {
 
             return this.findVueObject(vueResult.jsFile, 'local', extendsName, true, vueResult.objectDeclaration).then((extendsResult) => {
                 // this.loader.addDependency(vueResult.jsFile.fullPath);
-
-                if (!extendsResult.objectExpression)
-                    throw new Error('Cannot find vue object!');
+                if (!extendsResult || !extendsResult.objectExpression)
+                    throw new Error('Cannot find super vue object!');
 
                 vueResult.jsFile.extends = extendsResult.jsFile;
                 return extendsResult.jsFile;
