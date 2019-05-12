@@ -102,6 +102,9 @@ class VueExtendTree {
      * from local
      */
     findVueObject(jsFile, from = 'export', identifier = 'default', recursive = false, beforeNode) {
+        if (identifier === 'USubnavDivider')
+            debugger;
+
         if (!identifier)
             throw new Error('Argument identifier is required!');
 
@@ -133,18 +136,22 @@ class VueExtendTree {
                     const exportsNode = babelResult.metadata.modules.exports;
                     const externalAllSpecifiers = [];
                     const exportSpecifier = exportsNode.specifiers.find((specifier) => {
-                        if (specifier.kind === 'local' && specifier.exported === identifier)
+                        if (specifier.exported === identifier)
                             return true;
                         if (specifier.kind === 'external-all')
                             externalAllSpecifiers.push(specifier);
                         return false;
                     });
-                    if (exportSpecifier)
+                    if (exportSpecifier && exportSpecifier.kind === 'local')
                         identifier = exportSpecifier.local; // Change identifier to local
-                    else if (recursive)
-                        return Promise.all(externalAllSpecifiers.map((specifier) => this.importVueObject(jsFile.fullPath, specifier.source, identifier)))
-                            .then((results) => results.find((result) => !!result));
-                    else
+                    else if (recursive) {
+                        if (exportSpecifier && exportSpecifier.kind === 'external')
+                            return this.importVueObject(jsFile.fullPath, exportSpecifier.source, identifier);
+                        else {
+                            return Promise.all(externalAllSpecifiers.map((specifier) => this.importVueObject(jsFile.fullPath, specifier.source, identifier)))
+                                .then((results) => results.find((result) => !!result));
+                        }
+                    } else
                         throw new Error('Cannot find identifier in exports: ' + identifier);
                 }
 
