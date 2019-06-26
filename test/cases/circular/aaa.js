@@ -1,0 +1,1 @@
+export { YYY } from './bbb';

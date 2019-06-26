@@ -63,15 +63,20 @@ class VueExtendTree {
         return extendsProperty.value.name;
     }
 
-    importVueObject(fullPath, sourcePath, identifier) {
+    importVueObject(fullPath, sourcePath, identifier, stack) {
         return new Promise((resolve, reject) => {
             let importPath = this.resolve(sourcePath, path.dirname(fullPath));
             if (importPath.endsWith('.vue') && fs.statSync(importPath).isDirectory())
                 importPath += '/index.js';
             else if (importPath.endsWith('dist/index.js'))
                 importPath = importPath.replace(/dist\/index\.js$/, 'index.js');
+
+            const uuid = importPath + ' && ' + identifier;
+            if (stack.includes(uuid))
+                return reject('Circular import:\n' + stack);
+            stack.push(uuid);
             return resolve(this.loadJSFile(importPath)
-                .then((jsFile) => this.findVueObject(jsFile, 'export', identifier, true)));
+                .then((jsFile) => this.findVueObject(jsFile, 'export', identifier, true, undefined, stack)));
         });
     }
 
@@ -101,7 +106,7 @@ class VueExtendTree {
      * from export
      * from local
      */
-    findVueObject(jsFile, from = 'export', identifier = 'default', recursive = false, beforeNode) {
+    findVueObject(jsFile, from = 'export', identifier = 'default', recursive = false, beforeNode, stack = []) {
         if (identifier === 'USubnavDivider')
             debugger;
 
@@ -124,10 +129,11 @@ class VueExtendTree {
                         objectDeclaration: exportDefault,
                         jsFile,
                         identifier,
+                        stack,
                     };
                 else if (exportDefault.declaration.type === 'Identifier') {
                     const exportDefaultName = exportDefault.declaration.name;
-                    return this.findVueObject(jsFile, 'local', exportDefaultName, recursive);
+                    return this.findVueObject(jsFile, 'local', exportDefaultName, recursive, undefined, stack);
                 } else
                     return null;
             } else {
@@ -146,9 +152,9 @@ class VueExtendTree {
                         identifier = exportSpecifier.local; // Change identifier to local
                     else if (recursive) {
                         if (exportSpecifier && exportSpecifier.kind === 'external')
-                            return this.importVueObject(jsFile.fullPath, exportSpecifier.source, identifier);
+                            return this.importVueObject(jsFile.fullPath, exportSpecifier.source, identifier, stack);
                         else {
-                            return Promise.all(externalAllSpecifiers.map((specifier) => this.importVueObject(jsFile.fullPath, specifier.source, identifier)))
+                            return Promise.all(externalAllSpecifiers.map((specifier) => this.importVueObject(jsFile.fullPath, specifier.source, identifier, stack)))
                                 .then((results) => results.find((result) => !!result));
                         }
                     } else
@@ -166,7 +172,7 @@ class VueExtendTree {
                             return false;
                     }));
                     if (importSpecifier)
-                        return this.importVueObject(jsFile.fullPath, importsNode.source, importSpecifier.imported);
+                        return this.importVueObject(jsFile.fullPath, importsNode.source, importSpecifier.imported, stack);
                 }
 
                 // Find from local
@@ -191,9 +197,10 @@ class VueExtendTree {
                                 objectDeclaration: node,
                                 jsFile,
                                 identifier,
+                                stack,
                             };
                         } else if (declarator.init.type === 'Identifier')
-                            return this.findVueObject(jsFile, 'local', declarator.init.name, recursive, node);
+                            return this.findVueObject(jsFile, 'local', declarator.init.name, recursive, node, stack);
                     }
                 }
 
@@ -216,7 +223,7 @@ class VueExtendTree {
             if (!extendsName)
                 throw new Error('Cannot find extends name!');
 
-            return this.findVueObject(vueResult.jsFile, 'local', extendsName, true, vueResult.objectDeclaration).then((extendsResult) => {
+            return this.findVueObject(vueResult.jsFile, 'local', extendsName, true, vueResult.objectDeclaration, vueResult.stack).then((extendsResult) => {
                 // this.loader.addDependency(vueResult.jsFile.fullPath);
                 if (!extendsResult || !extendsResult.objectExpression)
                     throw new Error('Cannot find super vue object!');
