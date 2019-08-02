@@ -1,7 +1,7 @@
 const fs = require('fs-extra');
 const path = require('path');
-const babel = require('babel-core');
-
+const babel = require('@babel/core');
+const traverse = require('@babel/traverse').default;
 class JSFile {
     // extends;
     constructor(options) {
@@ -40,13 +40,16 @@ class VueExtendTree {
                     const found = content.match(/<script>([\s\S]+)<\/script>/);
                     content = found ? found[1] : '';
                 }
+                const result = babel.transform(content, {
+                    ast: true,
+                    plugins: ['@babel/plugin-syntax-dynamic-import'],
+                });
+                result.metadata.modules = this.findModuleExportAndImport(result.ast);
 
                 const jsFile = new JSFile({
                     fullPath,
                     content,
-                    babelResult: babel.transform(content, {
-                        plugins: ['syntax-dynamic-import'],
-                    }),
+                    babelResult: result,
                     isVue,
                 });
 
@@ -80,6 +83,23 @@ class VueExtendTree {
         });
     }
 
+    findModuleExportAndImport(ast) {
+        const modules = { imports: [], exports: [] };
+        traverse(ast, {
+            enter(path) {
+                const type = path.node.type;
+                if (type === 'ImportDeclaration') {
+                    modules.imports.push(path.node);
+                } else if (type === 'ExportNamedDeclaration'
+                    || type === 'ExportDefaultDeclaration'
+                    || type === 'ExportAllDeclaration') {
+                    modules.exports.push(path.node);
+                }
+            },
+        });
+        return modules;
+    }
+
     /**
      * Find vue object recursively
      * @param {*} jsFile - Babel result
@@ -90,23 +110,23 @@ class VueExtendTree {
      *
      * @examples
      * e-1. export default {}
-     * e-2. export default ID [local]-> e-5, e-6, i-7, i-8, i-9, v-10, v-11
-     * e-3. export { A as ID } [local]-> e-5, e-6, i-7, i-8, i-9, v-10, v-11
+     * e-2. export default ID | [local]-> e-5, e-6, i-7, i-8, i-9, v-10, v-11
+     * e-3. export { A as ID } | [local]-> e-5, e-6, i-7, i-8, i-9, v-10, v-11
      * e-4. export * from
      * e-5. export const ID = {}
-     * e-6. export const A = ID [local]->
-     * i-7. import ID from [export]-> e-1, e-2
-     * i-8. import { A as ID } from [export]-> e-3, e-4, e-5, e-6
-     * i-9. import * from from [export]-> e-3, e-4, e-5, e-6
+     * e-6. export const A = ID | [local]->
+     * i-7. import ID from | [export]-> e-1, e-2
+     * i-8. import { A as ID } from | [export]-> e-3, e-4, e-5, e-6
+     * i-9. import * from | [export]-> e-3, e-4, e-5, e-6
      * v-10. const ID
-     * v-11. const A = ID [local]->
+     * v-11. const A = ID | [local]->
      *
      * 3 types:
      * from export default
      * from export
      * from local
      */
-    findVueObject(jsFile, from = 'export', identifier = 'default', recursive = false, beforeNode, stack = []) {
+    findVueObject(jsFile, from = 'export', identifier = 'default', recursive = false, stack = []) {
         if (identifier === 'USubnavDivider')
             debugger;
 
@@ -116,9 +136,10 @@ class VueExtendTree {
         return Promise.resolve(jsFile).then((jsFile) => {
             const babelResult = jsFile.babelResult;
 
-            if (from !== 'export' && identifier === 'default')
+            if (from !== 'export' && identifier === 'default') // no export just default
                 throw new Error('Identifier `default` is reserved word! Please set `from` as `export`');
             else if (from === 'export' && identifier === 'default') { // Find from export default, ignore 'from' param for easy way
+                // export default
                 const exportDefault = babelResult.ast.program.body.find((node) => node.type === 'ExportDefaultDeclaration');
                 if (!exportDefault)
                     throw new Error('Cannot find export default');
@@ -133,78 +154,191 @@ class VueExtendTree {
                     };
                 else if (exportDefault.declaration.type === 'Identifier') {
                     const exportDefaultName = exportDefault.declaration.name;
-                    return this.findVueObject(jsFile, 'local', exportDefaultName, recursive, undefined, stack);
+                    return this.findVueObject(jsFile, 'local', exportDefaultName, recursive, stack);
                 } else
                     return null;
             } else {
                 // Find from exports
                 if (from === 'export') {
-                    const exportsNode = babelResult.metadata.modules.exports;
+                    // const exportsNode = babelResult.metadata.modules.exports;
                     const externalAllSpecifiers = [];
-                    const exportSpecifier = exportsNode.specifiers.find((specifier) => {
-                        if (specifier.exported === identifier)
-                            return true;
-                        if (specifier.kind === 'external-all')
-                            externalAllSpecifiers.push(specifier);
-                        return false;
+                    let exportsDeclaratorNode;
+                    let exportsSpecifyNode;
+                    let exportsSource;
+                    traverse(babelResult.ast, {
+                        ExportNamedDeclaration(path) {
+                            path.traverse({
+                                VariableDeclarator(path) {
+                                    if (path.node.id.name === identifier) {
+                                        exportsDeclaratorNode = path.node;
+                                    }
+                                },
+                                ExportSpecifier(path) {
+                                    if (path.node.exported.name === identifier) {
+                                        exportsSpecifyNode = path.node;
+                                        exportsSource = path.parent.source.value;
+                                    }
+                                },
+
+                            }, { node: path.node });
+                        },
+                        ExportAllDeclaration(path) {
+                            externalAllSpecifiers.push(path.node);
+                        },
                     });
-                    if (exportSpecifier && exportSpecifier.kind === 'local')
-                        identifier = exportSpecifier.local; // Change identifier to local
-                    else if (recursive) {
-                        if (exportSpecifier && exportSpecifier.kind === 'external')
-                            return this.importVueObject(jsFile.fullPath, exportSpecifier.source, identifier, stack);
-                        else {
-                            return Promise.all(externalAllSpecifiers.map((specifier) => this.importVueObject(jsFile.fullPath, specifier.source, identifier, stack)))
-                                .then((results) => results.find((result) => !!result));
+                    if (exportsSpecifyNode) {
+                        const localname = exportsSpecifyNode.local.name;
+                        if (!exportsSource) {
+                            // export { A as B }
+                            identifier = localname;
+                        } else {
+                            // export { YYY } from './bbb';
+                            if (recursive)
+                                return this.importVueObject(jsFile.fullPath, exportsSource, localname, stack);
+                            else
+                                throw new Error('no recursive!');
                         }
-                    } else
+                    } else if (exportsDeclaratorNode) {
+                        // export const A = { a: 'xxx' }
+                        return {
+                            objectExpression: exportsDeclaratorNode.init,
+                            objectDeclaration: exportsDeclaratorNode,
+                            jsFile,
+                            identifier,
+                            stack,
+                        };
+                    } else if (recursive) {
+                        // export * from
+                        return Promise.all(externalAllSpecifiers.map((declaration) => this.importVueObject(jsFile.fullPath, declaration.source.value, identifier, stack)))
+                            .then((results) => results.find((result) => !!result));
+                    } else {
                         throw new Error('Cannot find identifier in exports: ' + identifier);
+                    }
                 }
 
                 if (recursive) {
                     // Find from imports
-                    let importSpecifier;
-                    const importsNode = babelResult.metadata.modules.imports.find((impt) => impt.specifiers.some((specifier) => {
-                        if (specifier.local === identifier) {
-                            importSpecifier = specifier;
-                            return true;
-                        } else
-                            return false;
-                    }));
-                    if (importSpecifier)
-                        return this.importVueObject(jsFile.fullPath, importsNode.source, importSpecifier.imported, stack);
+                    let importSource;
+                    traverse(babelResult.ast, {
+                        enter(path) {
+                            if (path.parentKey === 'body') {
+                                if (path.node.type === 'ImportDeclaration') {
+                                    let found = false;
+                                    path.traverse({
+                                        ModuleSpecifier(path) {
+                                            if (path.node.local.name === identifier) {
+                                                found = true;
+                                            }
+                                        },
+                                    });
+                                    if (found) {
+                                        importSource = path.node.source.value;
+                                    }
+                                }
+
+                                path.skip();
+                            }
+                        },
+                    });
+                    // const importsNode = babelResult.metadata.modules.imports.find((impt) => impt.specifiers.some((specifier) => {
+                    //     if (specifier.local.name === identifier) {
+                    //         importSpecifier = specifier;
+                    //         return true;
+                    //     } else
+                    //         return false;
+                    // }));
+                    if (importSource)
+                        return this.importVueObject(jsFile.fullPath, importSource, identifier, stack);
                 }
 
                 // Find from local
-                for (const node of babelResult.ast.program.body) {
-                    if (node === beforeNode) // 必须在 beforeNode 声明之前
-                        return null;
+                const target = null;
 
-                    let declarations;
-                    if (node.type === 'VariableDeclaration')
-                        declarations = node.declarations;
-                    else if (node.type === 'ExportNamedDeclaration')
-                        declarations = node.declaration.declarations;
-                    else
-                        continue;
+                // 外层定义
+                let declarator = null;
+                let objectDeclaration = null;
+                let objectExpression = null;
+                // const iterator = babelResult.ast.program.body;
+                traverse(babelResult.ast, {
+                    enter(path) {
+                        if (path.parentKey === 'body') {
+                            const node = path.node;
+                            if (node.type === 'VariableDeclaration') {
+                                const dec = node.declarations.find((declarator) => declarator.id.name === identifier);
+                                if (dec) {
+                                    declarator = dec;
+                                    objectExpression = declarator.init;
+                                    objectDeclaration = node;
+                                }
+                            } else if (/Declaration/.test(node.type)) {
+                                path.traverse({
+                                    VariableDeclarator(path) {
+                                        const dec = path.node;
 
-                    for (const declarator of declarations) {
-                        if (declarator.type !== 'VariableDeclarator' || declarator.id.name !== identifier)
-                            continue;
-                        if (declarator.init.type === 'ObjectExpression') {
-                            return {
-                                objectExpression: declarator.init,
-                                objectDeclaration: node,
-                                jsFile,
-                                identifier,
-                                stack,
-                            };
-                        } else if (declarator.init.type === 'Identifier')
-                            return this.findVueObject(jsFile, 'local', declarator.init.name, recursive, node, stack);
+                                        if (dec.id.name === identifier) {
+                                            declarator = dec;
+                                            objectExpression = declarator.init;
+                                            objectDeclaration = node;
+                                        }
+                                    },
+                                });
+                            }
+                            // statements always come after declarations
+                            if (node.type === 'ExpressionStatement') {
+                                if (node.expression.left && node.expression.left.name === identifier) {
+                                    objectExpression = node.expression.right;
+                                    objectDeclaration = node;
+                                }
+                            }
+                            path.skip();
+                        }
+                    },
+                });
+                // for (const node of iterator) {
+                //     if (node.type === 'VariableDeclaration') {
+                //         const dec = node.declarations.find((declarator) => declarator.id.name === identifier);
+                //         if (dec) {
+                //             declarator = dec;
+                //             objectExpression = declarator.init;
+                //             objectDeclaration = node;
+                //         }
+                //     } else if (/Declaration/.test(node.type)) {
+                //         traverse(node, {
+                //             VariableDeclarator(path) {
+                //                 const dec = path.node.declarations.find((declarator) => declarator.id.name === identifier);
+                //                 if (dec) {
+                //                     declarator = dec;
+                //                     objectExpression = declarator.init;
+                //                     objectDeclaration = node;
+                //                 }
+                //             },
+                //         });
+                //     }
+
+                //     // statements always come after declarations
+                //     if (node.type === 'ExpressionStatement') {
+                //         if (node.expression.left && node.expression.left.name === identifier) {
+                //             objectExpression = node.expression.right;
+                //             objectDeclaration = node;
+                //         }
+                //     }
+                // }
+                if (declarator) {
+                    if (objectExpression && objectExpression.type === 'ObjectExpression') {
+                        return {
+                            objectExpression,
+                            objectDeclaration,
+                            jsFile,
+                            identifier,
+                            stack,
+                        };
+                    } else if (objectExpression && objectExpression.type === 'Identifier') {
+                        return this.findVueObject(jsFile, 'local', objectExpression.name, recursive, stack);
                     }
+                    return null;
                 }
 
-                return null;
+                return target;
             }
         });
     }
@@ -212,7 +346,6 @@ class VueExtendTree {
     findSuper(jsFile) {
         return this.findVueObject(jsFile).then((vueResult) => {
             // this.loader.addDependency(jsFile.fullPath);
-
             if (!vueResult)
                 throw new Error('Cannot find vue object!');
 
@@ -223,7 +356,7 @@ class VueExtendTree {
             if (!extendsName)
                 throw new Error('Cannot find extends name!');
 
-            return this.findVueObject(vueResult.jsFile, 'local', extendsName, true, vueResult.objectDeclaration, vueResult.stack).then((extendsResult) => {
+            return this.findVueObject(vueResult.jsFile, 'local', extendsName, true, vueResult.stack).then((extendsResult) => {
                 // this.loader.addDependency(vueResult.jsFile.fullPath);
                 if (!extendsResult || !extendsResult.objectExpression)
                     throw new Error('Cannot find super vue object!');
