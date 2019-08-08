@@ -42,7 +42,10 @@ class VueExtendTree {
                 }
                 const result = babel.transform(content, {
                     ast: true,
-                    plugins: ['@babel/plugin-syntax-dynamic-import'],
+                    plugins: [
+                        '@babel/plugin-syntax-dynamic-import',
+                        '@babel/plugin-proposal-object-rest-spread',
+                    ],
                 });
                 const jsFile = new JSFile({
                     fullPath,
@@ -144,11 +147,11 @@ class VueExtendTree {
             } else {
                 // Find from exports
                 if (from === 'export') {
-                    // const exportsNode = babelResult.metadata.modules.exports;
                     const externalAllSpecifiers = [];
                     let exportsDeclaratorNode;
                     let exportsSpecifyNode;
                     let exportsSource;
+
                     traverse(babelResult.ast, {
                         ExportNamedDeclaration(path) {
                             path.traverse({
@@ -170,6 +173,7 @@ class VueExtendTree {
                             externalAllSpecifiers.push(path.node);
                         },
                     });
+
                     if (exportsSpecifyNode) {
                         const localname = exportsSpecifyNode.local.name;
                         if (!exportsSource) {
@@ -225,13 +229,7 @@ class VueExtendTree {
                             }
                         },
                     });
-                    // const importsNode = babelResult.metadata.modules.imports.find((impt) => impt.specifiers.some((specifier) => {
-                    //     if (specifier.local.name === identifier) {
-                    //         importSpecifier = specifier;
-                    //         return true;
-                    //     } else
-                    //         return false;
-                    // }));
+
                     if (importSource)
                         return this.importVueObject(jsFile.fullPath, importSource, ident, stack);
                 }
@@ -243,7 +241,7 @@ class VueExtendTree {
                 let declarator = null;
                 let objectDeclaration = null;
                 let objectExpression = null;
-                // const iterator = babelResult.ast.program.body;
+
                 traverse(babelResult.ast, {
                     enter(path) {
                         if (path.parentKey === 'body') {
@@ -279,35 +277,7 @@ class VueExtendTree {
                         }
                     },
                 });
-                // for (const node of iterator) {
-                //     if (node.type === 'VariableDeclaration') {
-                //         const dec = node.declarations.find((declarator) => declarator.id.name === identifier);
-                //         if (dec) {
-                //             declarator = dec;
-                //             objectExpression = declarator.init;
-                //             objectDeclaration = node;
-                //         }
-                //     } else if (/Declaration/.test(node.type)) {
-                //         traverse(node, {
-                //             VariableDeclarator(path) {
-                //                 const dec = path.node.declarations.find((declarator) => declarator.id.name === identifier);
-                //                 if (dec) {
-                //                     declarator = dec;
-                //                     objectExpression = declarator.init;
-                //                     objectDeclaration = node;
-                //                 }
-                //             },
-                //         });
-                //     }
 
-                //     // statements always come after declarations
-                //     if (node.type === 'ExpressionStatement') {
-                //         if (node.expression.left && node.expression.left.name === identifier) {
-                //             objectExpression = node.expression.right;
-                //             objectDeclaration = node;
-                //         }
-                //     }
-                // }
                 if (declarator) {
                     if (objectExpression && objectExpression.type === 'ObjectExpression') {
                         return {
