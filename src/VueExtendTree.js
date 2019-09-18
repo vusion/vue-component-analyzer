@@ -45,7 +45,10 @@ class VueExtendTree {
                     fullPath,
                     content,
                     babelResult: babel.transform(content, {
-                        plugins: ['syntax-dynamic-import'],
+                        plugins: [
+                            'syntax-dynamic-import',
+                            'syntax-object-rest-spread',
+                        ],
                     }),
                     isVue,
                 });
