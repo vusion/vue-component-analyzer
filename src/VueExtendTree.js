@@ -40,8 +40,9 @@ class VueExtendTree {
                     const found = content.match(/<script>([\s\S]+)<\/script>/);
                     content = found ? found[1] : '';
                 }
-                const result = babel.transform(content, {
-                    ast: true,
+                const ast = babel.parse(content, {
+                    configFile: false,
+                    presets: ['@babel/preset-env'],
                     plugins: [
                         '@babel/plugin-syntax-dynamic-import',
                         '@babel/plugin-proposal-object-rest-spread',
@@ -50,7 +51,7 @@ class VueExtendTree {
                 const jsFile = new JSFile({
                     fullPath,
                     content,
-                    babelResult: result,
+                    babelResult: { ast },
                     isVue,
                 });
 
